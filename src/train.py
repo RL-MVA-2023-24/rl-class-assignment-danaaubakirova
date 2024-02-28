@@ -1,3 +1,10 @@
+import numpy as np
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from collections import deque
+import random
+import os
 from gymnasium.wrappers import TimeLimit
 from env_hiv import HIVPatient
 
@@ -7,36 +14,66 @@ env = TimeLimit(
 # Now is the floor is yours to implement the agent and train it.
 
 
-# You have to implement your own agent.
-# Don't modify the methods names and signatures, but you can add methods.
-# ENJOY!
-class ProjectAgent:
-    def __init__(self, action_size, state_size, learning_rate=0.1, discount_factor=0.95, exploration_rate=1.0, exploration_decay=0.99, min_exploration_rate=0.01):
-        self.action_size = action_size
-        self.state_size = state_size
-        self.learning_rate = learning_rate
-        self.discount_factor = discount_factor
-        self.exploration_rate = exploration_rate
-        self.exploration_decay = exploration_decay
-        self.min_exploration_rate = min_exploration_rate
-        self.q_table = np.zeros((state_size, action_size))
+# Neural Network for approximating Q-values
+class DQN(nn.Module):
+    def __init__(self, input_dim, output_dim):
+        super(DQN, self).__init__()
+        self.network = nn.Sequential(
+            nn.Linear(input_dim, 128),  # Adjust the layer sizes as needed
+            nn.ReLU(),
+            nn.Linear(128, 128),
+            nn.ReLU(),
+            nn.Linear(128, output_dim)
+        )
     
-    def act(self, observation: np.ndarray, use_random: bool = False) -> int:
-        if use_random or np.random.rand() < self.exploration_rate:
+    def forward(self, x):
+        return self.network(x)
+
+class ProjectAgent:
+    def __init__(self, state_size, action_size, learning_rate=0.001, gamma=0.99, epsilon=1.0, epsilon_min=0.01, epsilon_decay=0.995, memory_size=10000, batch_size=64):
+        self.state_size = state_size
+        self.action_size = action_size
+        self.memory = deque(maxlen=memory_size)
+        self.batch_size = batch_size
+        self.gamma = gamma
+        self.epsilon = epsilon
+        self.epsilon_min = epsilon_min
+        self.epsilon_decay = epsilon_decay
+        self.model = DQN(state_size, action_size)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
+
+    def act(self, observation, use_random=False):
+        if use_random or np.random.rand() <= self.epsilon:
             return np.random.randint(self.action_size)
-        return np.argmax(self.q_table[observation])
+        observation = torch.FloatTensor(observation).unsqueeze(0)
+        with torch.no_grad():
+            action_values = self.model(observation)
+        return np.argmax(action_values.cpu().data.numpy())
 
-    def train(self, state, action, reward, next_state, done):
-        target = reward + self.discount_factor * np.max(self.q_table[next_state]) * (not done)
-        self.q_table[state, action] += self.learning_rate * (target - self.q_table[state, action])
-        if done:
-            self.exploration_rate = max(self.min_exploration_rate, self.exploration_rate * self.exploration_decay)
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.append((state, action, reward, next_state, done))
 
-    def save(self, path: str) -> None:
-        np.save(path, self.q_table)
+    def replay(self):
+        if len(self.memory) < self.batch_size:
+            return
+        minibatch = random.sample(self.memory, self.batch_size)
+        for state, action, reward, next_state, done in minibatch:
+            target = reward + (not done) * self.gamma * np.max(self.model(torch.FloatTensor(next_state)).detach().numpy())
+            target_f = self.model(torch.FloatTensor(state))
+            target_f[0][action] = target
+            self.optimizer.zero_grad()
+            loss = nn.MSELoss()(target_f, self.model(torch.FloatTensor(state)))
+            loss.backward()
+            self.optimizer.step()
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
 
-    def load(self, path: str = 'agent_model.npy') -> None:
-        if os.path.exists(path):
-            self.q_table = np.load(path)
+    def save(self, path):
+        torch.save(self.model.state_dict(), path)
+
+    def load(self, path='model_episode_100.pth'):
+        if os.path.isfile(path):
+            self.model.load_state_dict(torch.load(path))
+            self.model.eval()
         else:
-            print(f"File {path} not found. Unable to load model.")
+            print("No model file found at '{}'".format(path))
