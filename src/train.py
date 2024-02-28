@@ -77,3 +77,35 @@ class ProjectAgent:
             self.model.eval()
         else:
             print("No model file found at '{}'".format(path))
+            
+#state_size = env.observation_space.shape[0]
+#action_size = env.action_space.n
+
+#agent = ProjectAgent(state_size=state_size, action_size=action_size)
+#num_episodes = 100  # Total number of episodes to train
+#save_every = 10 
+
+#for episode in range(num_episodes):
+    #state = env.reset()
+    #state = np.reshape(state[0], [1, state_size])
+    #total_reward = 0
+
+    #for step in range(200):  # Max steps per episode
+    #    action = agent.act(state)
+    #    next_state, reward, done, _, _ = env.step(action)
+    #    next_state = np.reshape(next_state, [1, state_size])
+
+    #    agent.remember(state, action, reward, next_state, done)  # Store experience
+    #    state = next_state
+    #    total_reward += reward
+
+    #    if done:
+    #        break
+
+    #    agent.replay()  # Train the model with a batch of experiences
+
+    #print(f"Episode: {episode+1}, Total Reward: {total_reward}")
+
+    #if (episode + 1) % save_every == 0:
+    #    agent.save(f"model_episode_{episode+1}.pth")  # Save the model
+        
