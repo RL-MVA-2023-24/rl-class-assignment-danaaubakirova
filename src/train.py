@@ -11,11 +11,32 @@ env = TimeLimit(
 # Don't modify the methods names and signatures, but you can add methods.
 # ENJOY!
 class ProjectAgent:
-    def act(self, observation, use_random=False):
-        return 0
+    def __init__(self, action_size, state_size, learning_rate=0.1, discount_factor=0.95, exploration_rate=1.0, exploration_decay=0.99, min_exploration_rate=0.01):
+        self.action_size = action_size
+        self.state_size = state_size
+        self.learning_rate = learning_rate
+        self.discount_factor = discount_factor
+        self.exploration_rate = exploration_rate
+        self.exploration_decay = exploration_decay
+        self.min_exploration_rate = min_exploration_rate
+        self.q_table = np.zeros((state_size, action_size))
+    
+    def act(self, observation: np.ndarray, use_random: bool = False) -> int:
+        if use_random or np.random.rand() < self.exploration_rate:
+            return np.random.randint(self.action_size)
+        return np.argmax(self.q_table[observation])
 
-    def save(self, path):
-        pass
+    def train(self, state, action, reward, next_state, done):
+        target = reward + self.discount_factor * np.max(self.q_table[next_state]) * (not done)
+        self.q_table[state, action] += self.learning_rate * (target - self.q_table[state, action])
+        if done:
+            self.exploration_rate = max(self.min_exploration_rate, self.exploration_rate * self.exploration_decay)
 
-    def load(self):
-        pass
+    def save(self, path: str) -> None:
+        np.save(path, self.q_table)
+
+    def load(self, path: str = 'agent_model.npy') -> None:
+        if os.path.exists(path):
+            self.q_table = np.load(path)
+        else:
+            print(f"File {path} not found. Unable to load model.")
