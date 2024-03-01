@@ -93,7 +93,7 @@ class ProjectAgent:
     def save(self, path):
         torch.save(self.model.state_dict(), path)
 
-    def load(self, path='model.pth'):
+    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/model.pth'):
         if os.path.isfile(path):
             self.model.load_state_dict(torch.load(path))
             self.model.eval()
