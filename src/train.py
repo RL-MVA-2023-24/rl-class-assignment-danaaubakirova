@@ -69,7 +69,7 @@ class ProjectAgent:
         observation = torch.FloatTensor(observation).unsqueeze(0)
         with torch.no_grad():
             action_values = self.model(observation.to(self.device))
-        return np.argmax(action_values.cpu().data.numpy())
+        return int(np.argmax(action_values.cpu().data.numpy()))
 
     def remember(self, state, action, reward, next_state, done):
         self.memory.append(state, action, reward, next_state, done)
@@ -95,7 +95,7 @@ class ProjectAgent:
 
     def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/model.pth'):
         if os.path.isfile(path):
-            self.model.load_state_dict(torch.load(path, map_location=torch.device('cpu')))
+            self.model.load_state_dict(torch.load(path))
             self.model.eval()
         else:
             print("No model file found at '{}'".format(path))
