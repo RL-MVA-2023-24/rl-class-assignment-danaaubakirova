@@ -1,6 +1,7 @@
 from gymnasium.wrappers import TimeLimit
 from env_hiv import HIVPatient
 import torch
+import os
 import random
 import torch.nn as nn
 import torch.optim as optim
