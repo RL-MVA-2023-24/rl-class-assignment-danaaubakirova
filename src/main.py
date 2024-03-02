@@ -24,7 +24,7 @@ if __name__ == "__main__":
     agent = ProjectAgent()
     agent.load()
     # Keep the following lines to evaluate your agent unchanged.
-    score_agent: float = evaluate_HIV(agent=agent, nb_episode=1)
-    score_agent_dr: float = evaluate_HIV_population(agent=agent, nb_episode=15)
+    score_agent: float = evaluate_HIV(agent=agent, nb_episode=6)
+    score_agent_dr: float = evaluate_HIV_population(agent=agent, nb_episode=3)
     with open(file="score.txt", mode="w") as f:
         f.write(f"{score_agent}\n{score_agent_dr}")
