@@ -18,11 +18,11 @@ class DQN(nn.Module):
     def __init__(self,):
         super(DQN, self).__init__()
         self.network = nn.Sequential(
-            nn.Linear(6, 24),  # Adjust the layer sizes as needed
+            nn.Linear(6, 128),  # Adjust the layer sizes as needed
             nn.ReLU(),
-            nn.Linear(24, 24),
+            nn.Linear(128, 128),
             nn.ReLU(),
-            nn.Linear(24, 4)
+            nn.Linear(128, 4)
         )
     
     def forward(self, x):
@@ -48,8 +48,8 @@ class ReplayBuffer:
 class ProjectAgent:
     def __init__(self):
         config = {'nb_actions': 4,
-          'learning_rate': 0.001,
-          'gamma': 0.95,
+          'learning_rate': 0.0001,
+          'gamma': 0.99,
           'buffer_size': 1000000,
           'epsilon_min': 0.01,
           'epsilon_max': 1.,
@@ -57,7 +57,7 @@ class ProjectAgent:
           'epsilon_delay_decay': 20,
           'batch_size': 20,
           'gradient_steps': 1,
-          'update_target_strategy': 'replace', # or 'ema'
+          'update_target_strategy': 'ema', # or 'ema'
           'update_target_freq': 50,
           'update_target_tau': 0.005,
           'criterion': torch.nn.SmoothL1Loss()}
@@ -83,8 +83,8 @@ class ProjectAgent:
         self.update_target_tau = config['update_target_tau'] if 'update_target_tau' in config.keys() else 0.005
     
     def act(self, observation, use_random=False):
-       # if use_random or np.random.rand() <= self.epsilon:
-            #return np.random.randint(4)
+        if use_random:# or np.random.rand() <= self.epsilon:
+            return np.random.randint(4)
         with torch.no_grad():
             Q = self.model(torch.Tensor(observation).unsqueeze(0).to(self.device))
             return int(torch.argmax(Q).item())
@@ -133,7 +133,7 @@ class ProjectAgent:
                 tau = self.update_target_tau
                 for key in model_state_dict:
                     target_state_dict[key] = tau*model_state_dict[key] + (1-tau)*target_state_dict[key]
-                target_model.load_state_dict(target_state_dict)
+                self.target_model.load_state_dict(target_state_dict)
             # next transition
             step += 1
             if done or trunc:
