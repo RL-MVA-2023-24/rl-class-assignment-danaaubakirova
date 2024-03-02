@@ -48,19 +48,19 @@ class ReplayBuffer:
 class ProjectAgent:
     def __init__(self):
         config = {'nb_actions': 4,
-          'learning_rate': 0.0001,
-          'gamma': 0.99,
+          'learning_rate': 0.0005,
+          'gamma': 0.95,
           'buffer_size': 1000000,
           'epsilon_min': 0.01,
           'epsilon_max': 1.,
-          'epsilon_decay_period': 1000,
+          'epsilon_decay_period': 10000,
           'epsilon_delay_decay': 20,
           'batch_size': 20,
           'gradient_steps': 1,
-          'update_target_strategy': 'ema', # or 'ema'
+          'update_target_strategy': 'replace', # or 'ema'
           'update_target_freq': 50,
           'update_target_tau': 0.005,
-          'criterion': torch.nn.SmoothL1Loss()}
+          'criterion':  torch.nn.MSELoss()}#torch.nn.SmoothL1Loss()}
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = DQN().to(self.device)
         self.nb_actions = config['nb_actions']
@@ -102,6 +102,8 @@ class ProjectAgent:
     
     def train(self, env, max_episode):
         episode_return = []
+        highest_score = float('-inf')  # Initialize the highest score as negative infinity
+        best_episode = 0  # To keep track of which episode had the highest score
         episode = 0
         episode_cum_reward = 0
         state, _ = env.reset()
@@ -138,24 +140,27 @@ class ProjectAgent:
             step += 1
             if done or trunc:
                 episode += 1
-                print("Episode ", '{:3d}'.format(episode), 
-                      ", epsilon ", '{:6.2f}'.format(epsilon), 
-                      ", batch size ", '{:5d}'.format(len(self.memory)), 
-                      ", episode return ", '{:4.1f}'.format(episode_cum_reward),
-                      sep='')
-                state, _ = env.reset()
                 episode_return.append(episode_cum_reward)
-                episode_cum_reward = 0
-                #if (episode + 1) % 10 == 0:
-                self.save("model.pth")  # Save the model
+                print(f"Episode {episode:3d}, Epsilon {epsilon:6.2f}, Batch Size {len(self.memory):5d}, Episode Return {episode_cum_reward:4.1f}")
+
+                # Check if this episode's return is the highest so far
+                if episode_cum_reward > highest_score:
+                    highest_score = episode_cum_reward  # Update the highest score
+                    best_episode = episode  # Update the best episode number
+                    self.save(f"best_model_episode_{best_episode}.pth")  # Save the model as the best model
+
+                episode_cum_reward = 0  # Reset cumulative reward for the next episode
+                state, _ = env.reset()  # Reset the environment state for the next episode
             else:
                 state = next_state
+
+        print(f"Best Episode: {best_episode} with a score of {highest_score}")
         return episode_return
     
     def save(self, path):
         torch.save(self.target_model.state_dict(), path)
 
-    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/model.pth'): #
+    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/model.pth'): ##
         if os.path.isfile(path):
             self.model.load_state_dict(torch.load(path, map_location=torch.device('cpu')))
             self.model.eval()
