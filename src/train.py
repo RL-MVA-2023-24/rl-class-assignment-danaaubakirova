@@ -18,11 +18,11 @@ class DQN(nn.Module):
     def __init__(self,):
         super(DQN, self).__init__()
         self.network = nn.Sequential(
-            nn.Linear(6, 128),  # Adjust the layer sizes as needed
+            nn.Linear(6, 512),  # Adjust the layer sizes as needed
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(512, 512),
             nn.ReLU(),
-            nn.Linear(128, 4)
+            nn.Linear(512, 4)
         )
     
     def forward(self, x):
@@ -48,14 +48,14 @@ class ReplayBuffer:
 class ProjectAgent:
     def __init__(self):
         config = {'nb_actions': 4,
-          'learning_rate': 0.0005,
+          'learning_rate': 0.0001,
           'gamma': 0.95,
           'buffer_size': 1000000,
           'epsilon_min': 0.01,
           'epsilon_max': 1.,
           'epsilon_decay_period': 10000,
           'epsilon_delay_decay': 20,
-          'batch_size': 20,
+          'batch_size': 128,
           'gradient_steps': 1,
           'update_target_strategy': 'replace', # or 'ema'
           'update_target_freq': 50,
@@ -160,7 +160,7 @@ class ProjectAgent:
     def save(self, path):
         torch.save(self.target_model.state_dict(), path)
 
-    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/model.pth'): ##
+    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/best_model_episode_96.pth'): #/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/#
         if os.path.isfile(path):
             self.model.load_state_dict(torch.load(path, map_location=torch.device('cpu')))
             self.model.eval()
