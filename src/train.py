@@ -19,11 +19,11 @@ class DQN(nn.Module):
     def __init__(self,):
         super(DQN, self).__init__()
         self.network = nn.Sequential(
-            nn.Linear(6, 128),  # Adjust the layer sizes as needed
+            nn.Linear(6, 24),  # Adjust the layer sizes as needed
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(24, 24),
             nn.ReLU(),
-            nn.Linear(128, 4)
+            nn.Linear(24, 4)
         )
     
     def forward(self, x):
@@ -51,17 +51,18 @@ class ProjectAgent:
         # Directly use the environment's properties to set state_size and action_siz
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # Default values for other parameters
-        self.memory = ReplayBuffer(10000)
+        self.memory = ReplayBuffer(1000000)
         self.batch_size = 64
-        self.gamma = 0.99
+        self.gamma = 0.95
         self.epsilon = 1.0
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
-
+        self.epsilon_decay_step = 0.001
         # Initialize the DQN model with the state_size and action_size
         self.model = DQN().to(self.device)
         self.optimizer = optim.Adam(self.model.parameters(), lr=0.001)
         self.criterion = torch.nn.MSELoss()
+        
         
     def act(self, observation, use_random=False):
         if use_random or np.random.rand() <= self.epsilon:
@@ -78,7 +79,6 @@ class ProjectAgent:
         if len(self.memory) < self.batch_size:
             return
         minibatch = self.memory.sample(self.batch_size)
-        #print(len(minibatch))
         for state, action, reward, next_state, done in zip(*minibatch):
             target = reward + (not done) * self.gamma * np.max(self.model(next_state).cpu().detach().numpy())
             target_f = self.model(state)
@@ -87,8 +87,9 @@ class ProjectAgent:
             loss = self.criterion(target_f, self.model(state))
             loss.backward()
             self.optimizer.step()
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+
+        # Update epsilon
+        self.epsilon = max(self.epsilon_min, self.epsilon - self.epsilon_decay_step)
 
     def save(self, path):
         torch.save(self.model.state_dict(), path)
@@ -104,7 +105,7 @@ class ProjectAgent:
 #agent = ProjectAgent()
 
 # The training loop remains the same
-#num_episodes = 100  # Total number of episodes to train
+#num_episodes = 20  # Total number of episodes to train
 #save_every = 10 
 
 #for episode in range(num_episodes):
