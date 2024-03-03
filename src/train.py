@@ -1,20 +1,22 @@
 from gymnasium.wrappers import TimeLimit
 from env_hiv import HIVPatient
+from sklearn.ensemble import RandomForestRegressor
 import torch
 import os
 import random
 import torch.nn as nn
 import torch.optim as optim
 from copy import deepcopy
+import joblib
 import numpy as np
 env = TimeLimit(
  env=HIVPatient(domain_randomization=True), max_episode_steps=200
 )  # The time wrapper limits the number of steps in an episode at 200.
 # Now is the floor is yours to implement the agent and train it.
 
-# Neural Network for approximating Q-values
-
-# Updated Neural Network for approximating Q-values
+#from sklearn.ensemble import RandomForestRegressor
+#import numpy as np
+#import random
 class DQN(nn.Module):
     def __init__(self):
         super(DQN, self).__init__()
@@ -30,151 +32,110 @@ class DQN(nn.Module):
     
     def forward(self, x):
         return self.network(x)
-
-# Replay Buffer remains the same
-
-class ReplayBuffer:
-    def __init__(self, capacity, device):
-        self.capacity = capacity # capacity of the buffer
-        self.data = []
-        self.index = 0 # index of the next cell to be filled
-        self.device = device
-    def append(self, s, a, r, s_, d):
-        if len(self.data) < self.capacity:
-            self.data.append(None)
-        self.data[self.index] = (s, a, r, s_, d)
-        self.index = (self.index + 1) % self.capacity
-    def sample(self, batch_size):
-        batch = random.sample(self.data, batch_size)
-        return list(map(lambda x:torch.Tensor(np.array(x)).to(self.device), list(zip(*batch))))
-    def __len__(self):
-        return len(self.data)
-    
 class ProjectAgent:
     def __init__(self):
-        config = {
-            'nb_actions': 4,
-            'learning_rate': 0.0005,
-            'gamma': 0.99,
-            'buffer_size': 1000000,
-            'epsilon_min': 0.01,
-            'epsilon_max': 1.0,
-            'epsilon_decay_period': 20000,
-            'epsilon_delay_decay': 20,
-            'batch_size': 256,
-            'gradient_steps': 1,
-            'update_target_strategy': 'replace',  # Could be 'replace' or 'ema'
-            'update_target_freq': 100,
-            'update_target_tau': 0.01,
-            'criterion': torch.nn.MSELoss()
-        }
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = DQN().to(self.device)
-        self.nb_actions = config['nb_actions']
-        self.gamma = config['gamma'] if 'gamma' in config.keys() else 0.95
-        self.batch_size = config['batch_size'] if 'batch_size' in config.keys() else 100
-        buffer_size = config['buffer_size'] if 'buffer_size' in config.keys() else int(1e5)
-        self.memory = ReplayBuffer(buffer_size,self.device)
-        self.epsilon_max = config['epsilon_max'] if 'epsilon_max' in config.keys() else 1.
-        self.epsilon_min = config['epsilon_min'] if 'epsilon_min' in config.keys() else 0.01
-        self.epsilon_stop = config['epsilon_decay_period'] if 'epsilon_decay_period' in config.keys() else 1000
-        self.epsilon_delay = config['epsilon_delay_decay'] if 'epsilon_delay_decay' in config.keys() else 20
-        self.epsilon_step = (self.epsilon_max-self.epsilon_min)/self.epsilon_stop
-        self.target_model = deepcopy(self.model).to(self.device)
-        self.criterion = config['criterion'] if 'criterion' in config.keys() else torch.nn.MSELoss()
-        lr = config['learning_rate'] if 'learning_rate' in config.keys() else 0.001
-        self.optimizer = config['optimizer'] if 'optimizer' in config.keys() else torch.optim.Adam(self.model.parameters(), lr=lr)
-        self.nb_gradient_steps = config['gradient_steps'] if 'gradient_steps' in config.keys() else 1
-        self.update_target_strategy = config['update_target_strategy'] if 'update_target_strategy' in config.keys() else 'replace'
-        self.update_target_freq = config['update_target_freq'] if 'update_target_freq' in config.keys() else 20
-        self.update_target_tau = config['update_target_tau'] if 'update_target_tau' in config.keys() else 0.005
-    
-    def act(self, observation, use_random=False):
-        if use_random:# or np.random.rand() <= self.epsilon:
-            return np.random.randint(4)
-        with torch.no_grad():
-            Q = self.model(torch.Tensor(observation).unsqueeze(0).to(self.device))
-            return int(torch.argmax(Q).item())
+        self.nb_actions = 4  # Number of actions
+        self.gamma = 0.95  # Discount factor
+        self.iterations = 400  # Number of FQI iterations
+        self.models = []  # To store models for each FQI iteration
+        self.is_trained = False
 
-    def gradient_step(self):
-        if len(self.memory) > self.batch_size:
-            X, A, R, Y, D = self.memory.sample(self.batch_size)
-            QYmax = self.target_model(Y).max(1)[0].detach()
-            update = torch.addcmul(R, 1-D, QYmax, value=self.gamma)
-            QXA = self.model(X).gather(1, A.to(torch.long).unsqueeze(1))
-            loss = self.criterion(QXA, update.unsqueeze(1))
+        # Initialize the current DQN model
+        self.current_model = DQN()
+        self.optimizer = optim.Adam(self.current_model.parameters())
+        self.criterion = nn.MSELoss()
+        print("Agent initialized.")
+
+    def collect_samples(self, env, horizon):
+        print("Collecting samples...")
+        S, A, R, S2, D = [], [], [], [], []
+        s, _ = env.reset()
+        for _ in range(horizon):
+            a = self.act(s, use_random=True)
+            s2, r, done, _, _ = env.step(a)
+            S.append(s)
+            A.append(a)
+            R.append(r)
+            S2.append(s2)
+            D.append(done)
+            if done:
+                s, _ = env.reset()
+                print("Episode finished. Resetting environment.")
+            else:
+                s = s2
+        print("Sample collection complete.")
+        return np.array(S), np.array(A).reshape((-1, 1)), np.array(R), np.array(S2), np.array(D)
+
+    def train(self, env, horizon):
+        print("Starting training...")
+        S, A, R, S2, D = self.collect_samples(env, horizon)
+        self.fqi(S, A, R, S2, D)
+        print("Training completed.")
+
+    def fqi(self, S, A, R, S2, D):
+        for i in range(self.iterations):
+            print(f"Training iteration {i+1}/{self.iterations}...")
+            S_tensor = torch.FloatTensor(S)
+            A_tensor = torch.LongTensor(A)  # A_tensor is already in the correct shape, no need to unsqueeze twice
+            R_tensor = torch.FloatTensor(R)
+            S2_tensor = torch.FloatTensor(S2)
+            D_tensor = torch.FloatTensor(D)
+
+            with torch.no_grad():
+                Q_next = self.current_model(S2_tensor).detach().max(1)[0]
+
+            target_Q = R_tensor + self.gamma * (1 - D_tensor) * Q_next
+
+            Q_pred = self.current_model(S_tensor)
+            Q_current = Q_pred.gather(1, A_tensor)  # Use A_tensor directly without extra unsqueeze
+
+            loss = self.criterion(Q_current, target_Q.unsqueeze(1))
             self.optimizer.zero_grad()
             loss.backward()
-            self.optimizer.step()  
-    
-    def train(self, env, max_episode):
-        episode_return = []
-        highest_score = float('-inf')  # Initialize the highest score as negative infinity
-        best_episode = 0  # To keep track of which episode had the highest score
-        episode = 0
-        episode_cum_reward = 0
-        state, _ = env.reset()
-        epsilon = self.epsilon_max
-        step = 0
-        while episode < max_episode:
-            # update epsilon
-            if step > self.epsilon_delay:
-                epsilon = max(self.epsilon_min, epsilon-self.epsilon_step)
-            # select epsilon-greedy action
-            if np.random.rand() < epsilon:
-                action = env.action_space.sample()
-            else:
-                action = self.act(state)
-            # step
-            next_state, reward, done, trunc, _ = env.step(action)
-            self.memory.append(state, action, reward, next_state, done)
-            episode_cum_reward += reward
-            # train
-            for _ in range(self.nb_gradient_steps): 
-                self.gradient_step()
-            # update target network if needed
-            if self.update_target_strategy == 'replace':
-                if step % self.update_target_freq == 0: 
-                    self.target_model.load_state_dict(self.model.state_dict())
-            if self.update_target_strategy == 'ema':
-                target_state_dict = self.target_model.state_dict()
-                model_state_dict = self.model.state_dict()
-                tau = self.update_target_tau
-                for key in model_state_dict:
-                    target_state_dict[key] = tau*model_state_dict[key] + (1-tau)*target_state_dict[key]
-                self.target_model.load_state_dict(target_state_dict)
-            # next transition
-            step += 1
-            if done or trunc:
-                episode += 1
-                episode_return.append(episode_cum_reward)
-                print(f"Episode {episode:3d}, Epsilon {epsilon:6.2f}, Batch Size {len(self.memory):5d}, Episode Return {episode_cum_reward:4.1f}")
+            self.optimizer.step()
 
-                # Check if this episode's return is the highest so far
-                if episode_cum_reward > highest_score:
-                    highest_score = episode_cum_reward  # Update the highest score
-                    best_episode = episode  # Update the best episode number
-                    self.save(f"best_model_episode_{best_episode}.pth")  # Save the model as the best model
+        self.is_trained = True
+        print("All iterations completed.")
 
-                episode_cum_reward = 0  # Reset cumulative reward for the next episode
-                state, _ = env.reset()  # Reset the environment state for the next episode
-            else:
-                state = next_state
 
-        print(f"Best Episode: {best_episode} with a score of {highest_score}")
-        return episode_return
-    
-    def save(self, path):
-        torch.save(self.target_model.state_dict(), path)
-
-    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/best_model_episode_123.pth'): #/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/#
-        if os.path.isfile(path):
-            self.model.load_state_dict(torch.load(path, map_location=torch.device('cpu')))
-            self.model.eval()
+    def act(self, observation, use_random=False):
+        if use_random or not self.is_trained:
+            return np.random.randint(0, self.nb_actions)
         else:
-            print("No model file found at '{}'".format(path))
+            return self.greedy_action(observation)
 
-#state_dim = env.observation_space.shape[0]
-#n_action = env.action_space.n 
+    def greedy_action(self, s):
+        s_tensor = torch.FloatTensor(s).unsqueeze(0)  # Add batch dimension
+        with torch.no_grad():
+            Q_values = self.current_model(s_tensor)
+        return Q_values.max(1)[1].item()  # Return the action with the highest Q-value
+
+    def save(self, path):
+        """Save the current model to a file."""
+        print(f"Saving model to {path}...")
+        torch.save(self.current_model.state_dict(), path)
+        print("Model saved successfully.")
+
+    def load(self,):
+        """Load a model from a file."""
+        
+        path = '/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/model.pth'
+        if os.path.isfile(path):
+            print(f"Loading model from {path}...")
+            self.current_model.load_state_dict(torch.load(path, map_location=torch.device('cpu')))
+            self.current_model.eval()
+            self.is_trained = True
+            print("Model loaded successfully and ready for use.")
+        else:
+            print(f"No model file found at '{path}'.")
+
+# Initialize yo
+
+# Example usage
 #agent = ProjectAgent()
-#scores = agent.train(env, 200)
+#agent.train(env, horizon=10000)
+#model_save_path = 'model.pth'
+
+# Save the trained Q-functions to the specified path
+#agent.save(model_save_path)
+#print(f"Model saved to {model_save_path}")
