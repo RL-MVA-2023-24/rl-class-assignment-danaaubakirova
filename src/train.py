@@ -14,19 +14,24 @@ env = TimeLimit(
 
 # Neural Network for approximating Q-values
 
+# Updated Neural Network for approximating Q-values
 class DQN(nn.Module):
-    def __init__(self,):
+    def __init__(self):
         super(DQN, self).__init__()
         self.network = nn.Sequential(
-            nn.Linear(6, 512),  # Adjust the layer sizes as needed
-            nn.ReLU(),
-            nn.Linear(512, 512),
-            nn.ReLU(),
-            nn.Linear(512, 4)
+            nn.Linear(6, 256),  # Input layer size matches observation space dimension
+            nn.ReLU(),  # Activation function
+            nn.Linear(256, 128),  # First hidden layer
+            nn.ReLU(),  # Activation function
+            nn.Linear(128, 64),  # Second hidden layer
+            nn.ReLU(),  # Activation function
+            nn.Linear(64, 4)  # Output layer size matches action space dimension
         )
     
     def forward(self, x):
         return self.network(x)
+
+# Replay Buffer remains the same
 
 class ReplayBuffer:
     def __init__(self, capacity, device):
@@ -47,20 +52,22 @@ class ReplayBuffer:
     
 class ProjectAgent:
     def __init__(self):
-        config = {'nb_actions': 4,
-          'learning_rate': 0.0001,
-          'gamma': 0.95,
-          'buffer_size': 1000000,
-          'epsilon_min': 0.01,
-          'epsilon_max': 1.,
-          'epsilon_decay_period': 10000,
-          'epsilon_delay_decay': 20,
-          'batch_size': 128,
-          'gradient_steps': 1,
-          'update_target_strategy': 'replace', # or 'ema'
-          'update_target_freq': 50,
-          'update_target_tau': 0.005,
-          'criterion':  torch.nn.MSELoss()}#torch.nn.SmoothL1Loss()}
+        config = {
+            'nb_actions': 4,
+            'learning_rate': 0.0005,
+            'gamma': 0.99,
+            'buffer_size': 1000000,
+            'epsilon_min': 0.01,
+            'epsilon_max': 1.0,
+            'epsilon_decay_period': 20000,
+            'epsilon_delay_decay': 20,
+            'batch_size': 256,
+            'gradient_steps': 1,
+            'update_target_strategy': 'replace',  # Could be 'replace' or 'ema'
+            'update_target_freq': 100,
+            'update_target_tau': 0.01,
+            'criterion': torch.nn.MSELoss()
+        }
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = DQN().to(self.device)
         self.nb_actions = config['nb_actions']
@@ -160,14 +167,14 @@ class ProjectAgent:
     def save(self, path):
         torch.save(self.target_model.state_dict(), path)
 
-    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/best_model_episode_187.pth'): ## /home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/
+    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/best_model_episode_123.pth'): #/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/#
         if os.path.isfile(path):
             self.model.load_state_dict(torch.load(path, map_location=torch.device('cpu')))
             self.model.eval()
         else:
             print("No model file found at '{}'".format(path))
 
-#state_dim = env.observation_space.shape[0]
-#n_action = env.action_space.n 
-#agent = ProjectAgent()
-#scores = agent.train(env, 200)
+state_dim = env.observation_space.shape[0]
+n_action = env.action_space.n 
+agent = ProjectAgent()
+scores = agent.train(env, 200)
