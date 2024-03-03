@@ -8,7 +8,7 @@ import torch.optim as optim
 from copy import deepcopy
 import numpy as np
 env = TimeLimit(
- env=HIVPatient(domain_randomization=False), max_episode_steps=200
+ env=HIVPatient(domain_randomization=True), max_episode_steps=200
 )  # The time wrapper limits the number of steps in an episode at 200.
 # Now is the floor is yours to implement the agent and train it.
 
@@ -160,7 +160,7 @@ class ProjectAgent:
     def save(self, path):
         torch.save(self.target_model.state_dict(), path)
 
-    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/best_model_episode_96.pth'): #/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/#
+    def load(self, path='/home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/best_model_episode_187.pth'): ## /home/runner/work/rl-class-assignment-danaaubakirova/rl-class-assignment-danaaubakirova/src/
         if os.path.isfile(path):
             self.model.load_state_dict(torch.load(path, map_location=torch.device('cpu')))
             self.model.eval()
