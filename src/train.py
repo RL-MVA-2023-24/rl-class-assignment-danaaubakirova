@@ -174,7 +174,7 @@ class ProjectAgent:
         else:
             print("No model file found at '{}'".format(path))
 
-state_dim = env.observation_space.shape[0]
-n_action = env.action_space.n 
-agent = ProjectAgent()
-scores = agent.train(env, 200)
+#state_dim = env.observation_space.shape[0]
+#n_action = env.action_space.n 
+#agent = ProjectAgent()
+#scores = agent.train(env, 200)
